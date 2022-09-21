@@ -1,0 +1,279 @@
+# CloudFormation Template for a VM
+# Based on : https://skofgar.ch/dev/2020/11/deploying-a-vm-using-aws-cloud-formation/
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'CloudFormation - Demo VM Setup'
+
+# Parameters are useful during the provisoning process, where they
+# can be overriden or left and use default values. This is extremely
+# powerful to customize your Cloud Formation scripts down the road.
+Parameters:
+  KeyName:
+    Default: 'VMKey-AP2'
+    Description: 'Name of an existing EC2 KeyPair to enable SSH access to the instance'
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Name of an existing EC2 KeyPair.
+  StackPostfix:
+    Default: 'vm-1'
+    Description: 'Postfix for this vm stack. This is purely for ease of use, to recognize a particular VM more easily.'
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+  InstanceType:
+    Description: 'WebServer EC2 instance type. Change based on application needs.'
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+    ConstraintDescription: must be a valid EC2 instance type.
+  CidrBlock:
+    Description: 'Enter CIDR block that the VPC should use. Example: 10.0.0.0/16'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.0/16
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  LimitedSSHAccess:
+    Description: 'Enter CIDR for network that may access via SSH'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 101.98.23.0/24
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+# Mapping define what machines can be used
+# Note that this is a trimmed down version of the official AWS Template
+# Get more information:
+# - https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/mappings-section-structure.html
+# To see the original mappings list, go to https://aws.amazon.com/cloudformation/
+#  1) select "Get started with CloudFormation"
+#  2) sign into aws console
+#  3) in CloudFormation view select "Create Stack"
+#  4) select "Use a sample template"
+#  5) select "LAMP Stack"
+#  6) "View in Designer", at the bottom half section of the screen should be a
+#     template view (in either JSON or YAML), scroll to the "Mappings" section
+Mappings:
+  AWSInstanceType2Arch:
+    t1.micro:
+      Arch: HVMA2018
+    t2.nano:
+      Arch: HVMA2018
+    t2.micro:
+      Arch: HVMA2018
+    t2.small:
+      Arch: HVMA2018
+    t2.medium:
+      Arch: HVMA2018
+    t2.large:
+      Arch: HVMA2018
+  AWSRegionArch2AMI:
+    # Note that image's are AWS region specific. Hence,
+    # the "same" image has to be defined per region
+    # and the image ID's will vary and additional mappings
+    # may need to be added
+    us-west-1: #
+      HVMA2018: ami-09a3e40793c7092f5 # AWS image, comes with docker pre-installed
+      HVMU18: ami-0d705db840ec5f0c5 # Ubuntu 18
+    us-east-1: #
+      HVMA2018: ami-032930428bf1abbff
+      HVMU18: ami-0ac80df6eff0e70b5
+    eu-west-2: # London
+      HVMA2018: ami-0cf94b1c148cb4b81
+      HVMU18: ami-00f6a0c18edb19300
+    eu-west-3: # Paris
+      HVMA2018: ami-0d7d2b94a26cf241f
+      HVMU18: ami-0e11cbb34015ff725
+    ap-southeast-2: #Sydney
+      HVMA2018: ami-09a5c873bc79530d9
+      HVMU18: ami-0b55fc9b052b03618
+
+########
+# This is the section where we define all our services/resources that we use
+Resources:
+  # Define an EC2 instance. This is our virtual machine
+  VM:
+    Type: 'AWS::EC2::Instance'
+
+    Properties:
+      # Define the image that should be used for the VM
+      # The following notation will try to find an image in
+      # the region the VM is provisioned in.
+      # The notation below tries to find the correct image in the mappings
+      # defined above.
+      # Note: The same "image" has different image id's in different regions,
+      ImageId: !FindInMap
+        - AWSRegionArch2AMI
+        - !Ref 'AWS::Region'
+        - !FindInMap
+          - AWSInstanceType2Arch
+          - !Ref InstanceType
+          - Arch
+
+      # This defines the volume that should be mounted to the virtual machine.
+      BlockDeviceMappings:
+        # The device name or path might need to change depending on whether
+        # you use AWS images, Ubuntu or Windows etc..
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: 200
+            # Note: This volume will auto-delete, when the virtual machine
+            # is being terminated. This might not be desirable for your
+            # application. The reason, why this is set to 'true', is
+            # because upon deleting a CloudFormation setup, the volumes
+            # will otherwise not get automatically deleted and could suprise
+            # the user with unexpected cost over time.
+            DeleteOnTermination: true
+            Encrypted: true
+
+      # The instance type is parameterized for ease of use. It tells
+      # CloudFormation what kind of virtual machine (size, RAM, CPU, etc)
+      # it shoudl make available
+      InstanceType: !Ref InstanceType
+
+      # Associate the authetntication key that should be used.
+      # Note: these keys are managed through the AWS Console or CLI
+      KeyName: !Ref KeyName
+
+      # Associate Subnet
+      SubnetId: !Ref VMSubnet
+
+      # Associate Security Groups
+      SecurityGroupIds:
+        - !Ref FormationSecurityGroup
+
+      # Set a tag, for ease of use to recognize this VM more easily
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This defines the Security Group, used for the VM above
+  FormationSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH and general HTTP Access
+      SecurityGroupIngress:
+
+        # Configure HTTP access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+        # Configure (and limit) SSH access
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref LimitedSSHAccess
+
+      # Assign Security Group to a VPC
+      VpcId: !Ref VMvpc
+
+      # Set a tag, for ease of use to recognize the Security Group easier.
+      # This helps keeping track of which VM/EC2 machine this group is for.
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This defines the VPC
+  # Note: There is a default, but configurable, limit of 5 VPC per region
+  # https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html#vpc-limits-vpcs-subnets
+  VMvpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref CidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+
+      # Set a tag, for ease of use to recognize the VPC easier
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This defines the Internet Gateway
+  VMInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+
+      # Set a tag, for ease of use to recognize the Internet Gateway easier
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This attaches the Internet Gateway (IGW) to a VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    # Note: You can't attach an IGW to a VPC unless both are created:
+    Properties:
+      VpcId: !Ref VMvpc
+      InternetGatewayId: !Ref VMInternetGateway
+
+  # This defines a Subnet
+  VMSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # Link to the VPC the Subnet belongs to
+      VpcId: !Ref VMvpc
+
+      # Define the Cidr block
+      CidrBlock: 10.0.0.0/16
+
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs ''   # Get the first AZ in the list
+
+      # Set a tag, for ease of use to recognize the Subnet easier
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This defines the Routing Tables for our subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      # Link to the VPC the Routing Table belongs to
+      VpcId: !Ref VMvpc
+
+      # Set a tag, for ease of use to recognize the Routing Table easier
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
+  # This defines the routes. Public route table has direct routing to IGW
+  # Routes belong to a Routing Table and get associated to the IGW
+  PublicRouteVM:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VMInternetGateway
+
+  # Associate Routing Table to Subnet
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref VMSubnet
+
+  # This defines the Elastic IP Address. On creation AWS will provision an
+  # IP address and will then be usable for your VM
+  ElasticIPAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref VM
+
+      # Set a tag, for ease of use to recognize the EIP easier
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-${StackPostfix}
+
