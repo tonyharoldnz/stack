@@ -25,3 +25,12 @@ Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To u
 ## Further help
 
 To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+
+
+## #################################################
+## This implements a rather dodgy calculator using Angular.
+## Sourced from an example at https://www.techiediaries.com/angular-data-event-property-binding/
+## The original had compile errors because it expected to be able to assign null to this.firstOperand
+## This has been corrected to enable compilation but the logic is now broken when the AC button is clicked.
+## This is not a concern as the project is designed to show how Angular works, not to be an actual calculator.
+
