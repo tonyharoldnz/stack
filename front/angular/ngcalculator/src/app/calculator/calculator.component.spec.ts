@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed, tick } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 
 import { CalculatorComponent } from './calculator.component';
 
@@ -39,35 +38,40 @@ describe('CalculatorComponent', () => {
     
   });
 
-  it('should be able to do simple maths', () => {
-
-    const compiled = fixture.nativeElement as HTMLElement;
-
-    let five = fixture.debugElement.nativeElement.querySelector("button[value='5']");
-    let times = fixture.debugElement.nativeElement.querySelector("button[value='*']");
-    let seven = fixture.debugElement.nativeElement.querySelector("button[value='7']");
-    let eqsign = fixture.debugElement.nativeElement.querySelector("button[value='=']");
-
-    five.click();
-    times.click();
-    seven.click();
-    eqsign.click();
-
-    // Design falilure!
-    // Working around handling of null in the calculator causes failure on the first calculation or when AC is pressed.
-    // Known issue, not relevant to this demo code.
-
-    five.click();
-    times.click();
-    seven.click();
-    eqsign.click();
-
-    fixture.detectChanges();
-
-    let screen = fixture.debugElement.nativeElement.querySelector("input.calculator-screen");
-
-    expect(screen?.value).toEqual('35');
-
+  it('should be able to do simple multiplication', () => {
+    verifyCalculation(fixture, '3','*', '9', '27');
   });
 
+  it('should be able to do simple division', () => {
+    verifyCalculation(fixture, '25','/', '7', '3.5714285714285716');
+  });
+
+  it('should be able to do simple addition', () => {
+    verifyCalculation(fixture, '140','+', '68', '208');
+  });
+
+  it('should be able to do simple subtraction', () => {
+    verifyCalculation(fixture, '137','-', '205', '-68');
+  });
+
+  function verifyCalculation(fixture: ComponentFixture<CalculatorComponent>, op1: string, operator: string, op2: string, expected: string): void
+  {
+    fixture.debugElement.nativeElement.querySelector("button[value='all-clear']").click();
+    op1.split('').forEach((digit) => {
+      let button = fixture.debugElement.nativeElement.querySelector("button[value='" + digit + "']");
+      button.click();
+    });
+    fixture.debugElement.nativeElement.querySelector("button[value='"+operator+"']").click();
+    op2.split('').forEach((digit) => {
+      let button = fixture.debugElement.nativeElement.querySelector("button[value='" + digit + "']");
+      button.click();
+    });
+    fixture.debugElement.nativeElement.querySelector("button[value='=']").click();
+  
+    fixture.detectChanges();
+  
+    let screen = fixture.debugElement.nativeElement.querySelector("input.calculator-screen");
+  
+    expect(screen?.value).toEqual(expected);
+  }
 });

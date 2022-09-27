@@ -11,20 +11,19 @@ export class CalculatorComponent implements OnInit {
 
   currentNumber = '0';
   firstOperand = 0;
+  firstOperandInitialised = false;
   operator = '';
   waitForSecondNumber = false;
 
   ngOnInit(): void {
   }
   public getNumber(v: string){
-    console.log(v);
     if(this.waitForSecondNumber)
     {
       this.currentNumber = v;
       this.waitForSecondNumber = false;
     }else{
-      this.currentNumber === '0'? this.currentNumber = v: this.currentNumber += v;
-
+      this.currentNumber === '0' ? this.currentNumber = v: this.currentNumber += v;
     }
   }
   getDecimal(){
@@ -51,25 +50,25 @@ export class CalculatorComponent implements OnInit {
      }
   }
   public getOperation(op: string){
-    console.log(op);
 
-    if(this.firstOperand === null){
+    if(this.firstOperandInitialised === false){
       this.firstOperand = Number(this.currentNumber);
+      this.firstOperandInitialised = true;
 
     }else if(this.operator){
       const result = this.doCalculation(this.operator , Number(this.currentNumber))
       this.currentNumber = String(result);
       this.firstOperand = result;
+      this.firstOperandInitialised = true;
     }
     this.operator = op;
     this.waitForSecondNumber = true;
-
-    console.log(this.firstOperand);
 
   }
   public clear(){
     this.currentNumber = '0';
     this.firstOperand = 0;
+    this.firstOperandInitialised = false;
     this.operator = '';
     this.waitForSecondNumber = false;
   }
